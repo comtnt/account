@@ -1,3 +1,6 @@
 {
-    "accounts": {}
+    "database_path": "wx_accounts.db",
+    "default_expire_days": 30,
+    "expired_reply": "您的账号已过期或未开通，请联系管理员充值。",
+    "admin_wx_ids": []
 } 

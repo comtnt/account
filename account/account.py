@@ -1,18 +1,20 @@
 import plugins
 from plugins import *
 from common.log import logger
-from bridge.context import ContextType
+from bridge.context import ContextType, EventContext
 from bridge.reply import Reply, ReplyType
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
+from plugins import Plugin, Event, EventAction
+from .models import init_db, WxAccount
 
 @plugins.register(
     name="Account",
-    desc="账户管理插件,提供用户账户管理相关功能",
-    version="0.1",
+    desc="微信账号管理插件,提供账号管理和过期控制功能",
+    version="0.2",
     author="comtnt",
-    desire_priority=0
+    desire_priority=0  # 设置为普通优先级
 )
 class Account(Plugin):
     def __init__(self):
@@ -23,9 +25,16 @@ class Account(Plugin):
             if not self.config:
                 # 初始化默认配置
                 self.config = {
-                    "accounts": {}  # 用于存储账户信息
+                    "database_path": "wx_accounts.db",
+                    "default_expire_days": 30,
+                    "expired_reply": "您的账号已过期或未开通，请联系管理员充值。",
+                    "admin_wx_ids": []
                 }
                 self.save_config()
+            
+            # 初始化数据库
+            db_path = os.path.join(os.path.dirname(__file__), self.config["database_path"])
+            self.db = init_db(db_path)
             
             # 注册事件处理函数
             self.handlers[Event.ON_HANDLE_CONTEXT] = self.on_handle_context
@@ -36,136 +45,171 @@ class Account(Plugin):
 
     def on_handle_context(self, e_context: EventContext):
         """处理消息事件"""
-        if e_context["context"].type != ContextType.TEXT:
-            return
+        context = e_context["context"]
+        session = self.db.get_session()
         
-        content = e_context["context"].content.strip()
-        if not content.startswith("#account"):
-            return
-            
         try:
-            # 解析命令
+            # 获取发送者wx_id
+            if context.get("isgroup", False):
+                # 群消息
+                wx_id = context.get("msg").actual_user_id
+                nickname = context.get("msg").actual_user_nickname
+            else:
+                # 私聊消息
+                wx_id = context.get("msg").from_user_id
+                nickname = context.get("msg").from_user_nickname
+            
+            # 处理管理员命令
+            if context.type == ContextType.TEXT:
+                content = context.content.strip()
+                if content.startswith("#account") and wx_id in self.config["admin_wx_ids"]:
+                    self._handle_admin_cmd(e_context, content, session)
+                    return
+                    
+            # 检查账号状态
+            account = session.query(WxAccount).filter_by(wx_id=wx_id).first()
+            
+            # 如果是管理员，跳过检查
+            if wx_id in self.config["admin_wx_ids"]:
+                return
+            
+            # 账号不存在，自动创建并设置为过期
+            if not account:
+                account = WxAccount(
+                    wx_id=wx_id,
+                    nickname=nickname,
+                    expire_time=datetime.now(),
+                    is_active=False,
+                    remark="自动创建"
+                )
+                session.add(account)
+                session.commit()
+            
+            # 检查账号是否可用
+            if not account.is_active or account.is_expired():
+                e_context["reply"] = Reply(ReplyType.TEXT, self.config["expired_reply"])
+                e_context.action = EventAction.BREAK_PASS
+                return
+                
+        finally:
+            # 确保会话被关闭
+            self.db.remove_session()
+
+    def _handle_admin_cmd(self, e_context: EventContext, content: str, session):
+        """处理管理员命令"""
+        try:
             parts = content.split()
             if len(parts) == 1:
-                # 显示帮助信息
                 self._show_help(e_context)
                 return
                 
             cmd = parts[1]
-            if cmd == "register":
-                # 注册账户
-                if len(parts) != 4:
-                    e_context["reply"] = Reply(ReplyType.ERROR, "格式错误,正确格式: #account register <username> <password>")
+            if cmd == "add":
+                # 添加账号 #account add wx_id days [nickname] [remark]
+                if len(parts) < 4:
+                    e_context["reply"] = Reply(ReplyType.ERROR, "格式错误,正确格式: #account add wx_id days [nickname] [remark]")
                     e_context.action = EventAction.BREAK_PASS
                     return
-                self._register_account(e_context, parts[2], parts[3])
-            
-            elif cmd == "login":
-                # 登录账户
-                if len(parts) != 4:
-                    e_context["reply"] = Reply(ReplyType.ERROR, "格式错误,正确格式: #account login <username> <password>")
+                    
+                wx_id = parts[2]
+                days = int(parts[3])
+                nickname = parts[4] if len(parts) > 4 else ""
+                remark = " ".join(parts[5:]) if len(parts) > 5 else ""
+                
+                account = session.query(WxAccount).filter_by(wx_id=wx_id).first()
+                if not account:
+                    account = WxAccount(wx_id=wx_id)
+                    
+                account.nickname = nickname
+                account.expire_time = datetime.now() + timedelta(days=days)
+                account.is_active = True
+                account.remark = remark
+                
+                session.add(account)
+                session.commit()
+                
+                e_context["reply"] = Reply(ReplyType.INFO, f"账号 {wx_id} 已添加/更新，过期时间: {account.expire_time}")
+                
+            elif cmd == "del":
+                # 删除账号 #account del wx_id
+                if len(parts) != 3:
+                    e_context["reply"] = Reply(ReplyType.ERROR, "格式错误,正确格式: #account del wx_id")
                     e_context.action = EventAction.BREAK_PASS
                     return
-                self._login_account(e_context, parts[2], parts[3])
-            
-            elif cmd == "logout":
-                # 登出账户
-                self._logout_account(e_context)
-            
+                    
+                wx_id = parts[2]
+                account = session.query(WxAccount).filter_by(wx_id=wx_id).first()
+                if account:
+                    session.delete(account)
+                    session.commit()
+                    e_context["reply"] = Reply(ReplyType.INFO, f"账号 {wx_id} 已删除")
+                else:
+                    e_context["reply"] = Reply(ReplyType.ERROR, f"账号 {wx_id} 不存在")
+                    
+            elif cmd == "list":
+                # 列出所有账号 #account list
+                accounts = session.query(WxAccount).all()
+                if not accounts:
+                    e_context["reply"] = Reply(ReplyType.INFO, "暂无账号信息")
+                    e_context.action = EventAction.BREAK_PASS
+                    return
+                    
+                reply = "账号列表:\n"
+                for acc in accounts:
+                    status = "正常" if acc.is_active and not acc.is_expired() else "已过期"
+                    reply += f"WX_ID: {acc.wx_id}\n"
+                    reply += f"昵称: {acc.nickname}\n"
+                    reply += f"状态: {status}\n"
+                    reply += f"过期时间: {acc.expire_time}\n"
+                    reply += f"备注: {acc.remark}\n"
+                    reply += "----------\n"
+                    
+                e_context["reply"] = Reply(ReplyType.INFO, reply)
+                
             elif cmd == "info":
-                # 查看账户信息
-                self._show_account_info(e_context)
-            
+                # 查看账号信息 #account info wx_id
+                if len(parts) != 3:
+                    e_context["reply"] = Reply(ReplyType.ERROR, "格式错误,正确格式: #account info wx_id")
+                    e_context.action = EventAction.BREAK_PASS
+                    return
+                    
+                wx_id = parts[2]
+                account = session.query(WxAccount).filter_by(wx_id=wx_id).first()
+                if not account:
+                    e_context["reply"] = Reply(ReplyType.ERROR, f"账号 {wx_id} 不存在")
+                    e_context.action = EventAction.BREAK_PASS
+                    return
+                    
+                status = "正常" if account.is_active and not account.is_expired() else "已过期"
+                reply = f"账号信息:\nWX_ID: {account.wx_id}\n"
+                reply += f"昵称: {account.nickname}\n"
+                reply += f"状态: {status}\n"
+                reply += f"创建时间: {account.create_time}\n"
+                reply += f"过期时间: {account.expire_time}\n"
+                reply += f"备注: {account.remark}"
+                
+                e_context["reply"] = Reply(ReplyType.INFO, reply)
+                
             else:
                 e_context["reply"] = Reply(ReplyType.ERROR, f"未知命令: {cmd}\n请使用 #account 查看帮助")
-                e_context.action = EventAction.BREAK_PASS
                 
         except Exception as e:
-            logger.error(f"[Account] 处理消息异常: {e}")
+            logger.error(f"[Account] 处理管理员命令异常: {e}")
             e_context["reply"] = Reply(ReplyType.ERROR, f"处理命令出错: {e}")
-            e_context.action = EventAction.BREAK_PASS
+            
+        e_context.action = EventAction.BREAK_PASS
 
     def _show_help(self, e_context: EventContext):
         """显示帮助信息"""
-        help_text = """账户管理插件使用帮助:
-#account register <username> <password> - 注册新账户
-#account login <username> <password> - 登录账户
-#account logout - 登出当前账户
-#account info - 查看当前账户信息"""
+        if e_context["context"]["msg"].from_user_id not in self.config["admin_wx_ids"]:
+            e_context["reply"] = Reply(ReplyType.INFO, "您不是管理员，无法使用此功能")
+            e_context.action = EventAction.BREAK_PASS
+            return
+            
+        help_text = """账号管理插件使用帮助:
+#account add wx_id days [nickname] [remark] - 添加/更新账号
+#account del wx_id - 删除账号
+#account list - 列出所有账号
+#account info wx_id - 查看账号信息"""
         e_context["reply"] = Reply(ReplyType.INFO, help_text)
-        e_context.action = EventAction.BREAK_PASS
-
-    def _register_account(self, e_context: EventContext, username: str, password: str):
-        """注册新账户"""
-        if username in self.config["accounts"]:
-            e_context["reply"] = Reply(ReplyType.ERROR, "该用户名已存在")
-            e_context.action = EventAction.BREAK_PASS
-            return
-            
-        # 存储账户信息(实际应用中应该加密存储密码)
-        self.config["accounts"][username] = {
-            "password": password,
-            "create_time": str(datetime.now())
-        }
-        self.save_config()
-        
-        e_context["reply"] = Reply(ReplyType.INFO, f"账户 {username} 注册成功")
-        e_context.action = EventAction.BREAK_PASS
-
-    def _login_account(self, e_context: EventContext, username: str, password: str):
-        """登录账户"""
-        if username not in self.config["accounts"]:
-            e_context["reply"] = Reply(ReplyType.ERROR, "用户不存在")
-            e_context.action = EventAction.BREAK_PASS
-            return
-            
-        account = self.config["accounts"][username]
-        if account["password"] != password:
-            e_context["reply"] = Reply(ReplyType.ERROR, "密码错误")
-            e_context.action = EventAction.BREAK_PASS
-            return
-            
-        # 记录登录状态
-        user_id = e_context["context"]["session_id"]
-        self.config["accounts"][username]["last_login"] = str(datetime.now())
-        self.config["accounts"][username]["session_id"] = user_id
-        self.save_config()
-        
-        e_context["reply"] = Reply(ReplyType.INFO, f"账户 {username} 登录成功")
-        e_context.action = EventAction.BREAK_PASS
-
-    def _logout_account(self, e_context: EventContext):
-        """登出账户"""
-        user_id = e_context["context"]["session_id"]
-        logged_in = False
-        
-        # 清除登录状态
-        for username, account in self.config["accounts"].items():
-            if account.get("session_id") == user_id:
-                del account["session_id"]
-                logged_in = True
-                self.save_config()
-                e_context["reply"] = Reply(ReplyType.INFO, f"账户 {username} 已登出")
-                break
-                
-        if not logged_in:
-            e_context["reply"] = Reply(ReplyType.ERROR, "当前未登录任何账户")
-        e_context.action = EventAction.BREAK_PASS
-
-    def _show_account_info(self, e_context: EventContext):
-        """显示账户信息"""
-        user_id = e_context["context"]["session_id"]
-        
-        # 查找当前登录的账户
-        for username, account in self.config["accounts"].items():
-            if account.get("session_id") == user_id:
-                info = f"""当前登录账户信息:
-用户名: {username}
-创建时间: {account['create_time']}
-最后登录: {account.get('last_login', '从未登录')}"""
-                e_context["reply"] = Reply(ReplyType.INFO, info)
-                e_context.action = EventAction.BREAK_PASS
-                return
-                
-        e_context["reply"] = Reply(ReplyType.ERROR, "当前未登录任何账户")
         e_context.action = EventAction.BREAK_PASS 
