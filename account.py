@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import json
 import os
 from plugins import Plugin, Event, EventAction
-from .models import init_db, WxAccount
+from models import init_db, WxAccount  # 修改导入路径
 
 @plugins.register(
     name="Account",
