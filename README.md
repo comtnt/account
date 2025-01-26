@@ -11,54 +11,65 @@
 
 ## 安装方法
 
-### 方法一：直接安装
+### 方法一：使用插件管理器（推荐）
 
-1. 将插件文件夹复制到 ChatGPT-on-WeChat 的 plugins 目录下：
-```bash
-cd chatgpt-on-wechat/plugins
-git clone https://github.com/comtnt/plugin_account.git account
-```
-
-2. 重启程序，插件会自动加载
-
-### 方法二：使用插件管理器
-
-使用 `#installp` 命令安装：
+在与机器人对话中执行：
 ```bash
 #installp https://github.com/comtnt/plugin_account.git
 ```
 
-## 使用方法
+### 方法二：手动安装
 
-插件提供以下命令：
+1. 进入 ChatGPT-on-WeChat 的插件目录：
+```bash
+cd chatgpt-on-wechat/plugins
+```
 
-- `#account register <username> <password>` - 注册新账户
-- `#account login <username> <password>` - 登录账户
-- `#account logout` - 登出当前账户
-- `#account info` - 查看当前账户信息
+2. 克隆插件仓库：
+```bash
+git clone https://github.com/comtnt/plugin_account.git account
+```
+
+3. 安装依赖：
+```bash
+cd account
+pip install -r requirements.txt
+```
+
+4. 重启程序使插件生效
 
 ## 配置说明
 
-插件的配置文件为 `config.json`，初次使用时将自动从 `config.json.template` 创建。
+1. 复制配置模板：
+```bash
+cp config.json.template config.json
+```
 
-配置文件结构：
+2. 编辑 `config.json` 添加管理员：
 ```json
 {
-    "accounts": {
-        "username": {
-            "password": "用户密码",
-            "create_time": "创建时间",
-            "last_login": "最后登录时间",
-            "session_id": "当前会话ID"
-        }
-    }
+    "database_path": "wx_accounts.db",
+    "default_expire_days": 30,
+    "expired_reply": "您的账号已过期或未开通，请联系管理员充值。",
+    "admin_wx_ids": ["your_wx_id"]  # 替换为管理员的微信ID
 }
 ```
 
+## 使用方法
+
+插件提供以下管理命令（仅管理员可用）：
+
+- `#account add wx_id days [nickname] [remark]` - 添加/更新账号
+- `#account del wx_id` - 删除账号
+- `#account list` - 列出所有账号
+- `#account info wx_id` - 查看账号信息
+
 ## 注意事项
 
-1. 密码目前以明文形式存储，建议在实际使用时增加加密功能
-2. 用户登录状态基于会话ID，重启程序后需要重新登录
+1. 必须先在配置文件中设置管理员wx_id
+2. 账号过期后将无法使用机器人功能
+3. 管理员不受账号过期限制
+4. 数据库文件默认保存在插件目录下
 
 ## 开发计划
 
