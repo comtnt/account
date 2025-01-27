@@ -93,13 +93,13 @@ class Account(Plugin):
         
         reset_time = account.quota_reset_time
         if not reset_time:
-            return f"\n（免费额度：{account.free_quota}次，将在明天0点重置）"
+            return f"\n（{account.wx_id} - 免费额度：{account.free_quota}次，将在明天0点重置）"
         
         now = datetime.now()
         if reset_time > now:
             hours = int((reset_time - now).total_seconds() / 3600)
-            return f"\n（剩余免费额度：{account.free_quota}次，{hours}小时后重置）"
-        return f"\n（免费额度：{account.free_quota}次，将在明天0点重置）"
+            return f"\n（{account.wx_id} - 剩余免费额度：{account.free_quota}次，{hours}小时后重置）"
+        return f"\n（{account.wx_id} - 免费额度：{account.free_quota}次，将在明天0点重置）"
 
     def on_handle_context(self, e_context: EventContext):
         """处理消息事件"""
