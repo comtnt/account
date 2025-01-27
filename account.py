@@ -39,13 +39,13 @@ class Account(Plugin):
             
             # 注册事件处理函数
             self.handlers[Event.ON_HANDLE_CONTEXT] = self.on_handle_context
-            self.handlers[Event.ON_HANDLE_REPLY] = self.on_handle_reply
+            self.handlers[Event.ON_DECORATE_REPLY] = self.on_decorate_reply
             logger.info("[Account] 插件已加载")
         except Exception as e:
             logger.error(f"[Account] 插件初始化异常: {e}")
             raise e
 
-    def on_handle_reply(self, e_context: EventContext, *args, **kwargs):
+    def on_decorate_reply(self, e_context: EventContext, *args, **kwargs):
         """处理回复事件，添加额度信息"""
         if not e_context["reply"]:
             return
