@@ -49,6 +49,9 @@ class Account(Plugin):
         session = self.db.get_session()
         
         try:
+            # 记录context内容到日志
+            logger.info(f"[Account] Context内容: {context}")
+            
             # 获取发送者wx_id
             if context.get("isgroup", False):
                 # 群消息
