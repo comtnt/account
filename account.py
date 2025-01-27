@@ -39,10 +39,38 @@ class Account(Plugin):
             
             # 注册事件处理函数
             self.handlers[Event.ON_HANDLE_CONTEXT] = self.on_handle_context
+            self.handlers[Event.ON_HANDLE_REPLY] = self.on_handle_reply
             logger.info("[Account] 插件已加载")
         except Exception as e:
             logger.error(f"[Account] 插件初始化异常: {e}")
             raise e
+
+    def on_handle_reply(self, e_context: EventContext, *args, **kwargs):
+        """处理回复事件，添加额度信息"""
+        if not e_context["reply"]:
+            return
+            
+        session = self.db.get_session()
+        try:
+            context = e_context["context"]
+            if context.get("isgroup", False):
+                # 群消息
+                session_id = context.get("session_id", "")
+                if "@@" in session_id:
+                    group_id = session_id.split("@@")[1]
+                    account = session.query(WxAccount).filter_by(wx_id=group_id).first()
+            else:
+                # 私聊消息
+                wx_id = context.get("msg").from_user_id
+                account = session.query(WxAccount).filter_by(wx_id=wx_id).first()
+            
+            # 如果账号存在且使用免费额度，添加额度信息
+            if account and (not account.is_active or account.is_expired()):
+                quota_info = self._get_quota_info(account)
+                if quota_info and e_context["reply"].type == ReplyType.TEXT:
+                    e_context["reply"].content = e_context["reply"].content + quota_info
+        finally:
+            self.db.remove_session()
 
     def _check_and_update_quota(self, account, session):
         """检查并更新免费额度"""
@@ -65,13 +93,13 @@ class Account(Plugin):
         
         reset_time = account.quota_reset_time
         if not reset_time:
-            return f"（免费额度：{account.free_quota}次，将在明天0点重置）"
+            return f"\n（免费额度：{account.free_quota}次，将在明天0点重置）"
         
         now = datetime.now()
         if reset_time > now:
             hours = int((reset_time - now).total_seconds() / 3600)
-            return f"（剩余免费额度：{account.free_quota}次，{hours}小时后重置）"
-        return f"（免费额度：{account.free_quota}次，将在明天0点重置）"
+            return f"\n（剩余免费额度：{account.free_quota}次，{hours}小时后重置）"
+        return f"\n（免费额度：{account.free_quota}次，将在明天0点重置）"
 
     def on_handle_context(self, e_context: EventContext):
         """处理消息事件"""
