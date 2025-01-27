@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import os
 from plugins import Plugin, Event, EventAction
 from plugins.event import EventContext
-from models import init_db, WxAccount
+from .models import init_db, WxAccount
 
 @plugins.register(
     name="Account",
