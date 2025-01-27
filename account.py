@@ -61,7 +61,7 @@ class Account(Plugin):
     def _get_quota_info(self, account):
         """获取额度信息提示"""
         if account.is_active and not account.is_expired():
-            return "（付费用户）"
+            return ""  # 付费用户不显示额度信息
         
         reset_time = account.quota_reset_time
         if not reset_time:
