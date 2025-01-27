@@ -147,8 +147,7 @@ class Account(Plugin):
                     # 如果群账号过期，检查免费额度
                     if not group_account.is_active or group_account.is_expired():
                         if not self._check_and_update_quota(group_account, session):
-                            quota_info = self._get_quota_info(group_account)
-                            expired_reply = f"该群({group_id})未开通服务或已过期，请联系管理员开通。{quota_info}"
+                            expired_reply = f"该群({group_id})未开通服务或已过期，请联系管理员开通。"
                             e_context["reply"] = Reply(ReplyType.TEXT, expired_reply)
                             e_context.action = EventAction.BREAK_PASS
                             return
@@ -186,8 +185,7 @@ class Account(Plugin):
             # 检查账号是否可用，如果不可用检查免费额度
             if not account.is_active or account.is_expired():
                 if not self._check_and_update_quota(account, session):
-                    quota_info = self._get_quota_info(account)
-                    expired_reply = f"您的账号({wx_id})已过期或未开通，请联系管理员充值。{quota_info}"
+                    expired_reply = f"您的账号({wx_id})已过期或未开通，请联系管理员充值。"
                     e_context["reply"] = Reply(ReplyType.TEXT, expired_reply)
                     e_context.action = EventAction.BREAK_PASS
                     return
