@@ -17,8 +17,7 @@ class WxAccount(Base):
     """微信账号模型"""
     __tablename__ = 'wx_accounts'
 
-    id = Column(Integer, primary_key=True)
-    wx_id = Column(String(50), unique=True, nullable=False)
+    wx_id = Column(String(50), primary_key=True)  # 使用wx_id作为主键
     nickname = Column(String(50))
     create_time = Column(DateTime, default=datetime.now)
     expire_time = Column(DateTime)
