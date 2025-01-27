@@ -52,11 +52,35 @@ class Account(Plugin):
             # 记录context内容到日志
             logger.info(f"[Account] Context内容: {context}")
             
-            # 获取发送者wx_id
+            # 获取发送者wx_id和群聊ID
             if context.get("isgroup", False):
                 # 群消息
                 wx_id = context.get("msg").actual_user_id
                 nickname = context.get("msg").actual_user_nickname
+                # 获取群聊ID
+                session_id = context.get("session_id", "")
+                if "@@" in session_id:
+                    group_id = session_id.split("@@")[1]
+                    # 检查群ID是否付费
+                    group_account = session.query(WxAccount).filter_by(wx_id=group_id).first()
+                    # 如果群未付费，自动创建群账号
+                    if not group_account:
+                        group_account = WxAccount(
+                            wx_id=group_id,
+                            nickname=context.get("group_name", ""),
+                            expire_time=datetime.now(),
+                            is_active=False,
+                            remark="自动创建(群聊)"
+                        )
+                        session.add(group_account)
+                        session.commit()
+                    
+                    # 如果群账号过期，直接返回过期消息
+                    if not group_account.is_active or group_account.is_expired():
+                        expired_reply = f"该群({group_id})未开通服务或已过期，请联系管理员开通。"
+                        e_context["reply"] = Reply(ReplyType.TEXT, expired_reply)
+                        e_context.action = EventAction.BREAK_PASS
+                        return
             else:
                 # 私聊消息
                 wx_id = context.get("msg").from_user_id
