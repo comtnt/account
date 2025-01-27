@@ -62,7 +62,7 @@ class Account(Plugin):
             # 处理管理员命令
             if context.type == ContextType.TEXT:
                 content = context.content.strip()
-                if content.startswith("#account") and wx_id in self.config["admin_wx_ids"]:
+                if content.startswith("$account") and wx_id in self.config["admin_wx_ids"]:
                     self._handle_admin_cmd(e_context, content, session)
                     return
                     
@@ -105,9 +105,9 @@ class Account(Plugin):
                 
             cmd = parts[1]
             if cmd == "add":
-                # 添加账号 #account add wx_id days [nickname] [remark]
+                # 添加账号 $account add wx_id days [nickname] [remark]
                 if len(parts) < 4:
-                    e_context["reply"] = Reply(ReplyType.ERROR, "格式错误,正确格式: #account add wx_id days [nickname] [remark]")
+                    e_context["reply"] = Reply(ReplyType.ERROR, "格式错误,正确格式: $account add wx_id days [nickname] [remark]")
                     e_context.action = EventAction.BREAK_PASS
                     return
                     
@@ -131,9 +131,9 @@ class Account(Plugin):
                 e_context["reply"] = Reply(ReplyType.INFO, f"账号 {wx_id} 已添加/更新，过期时间: {account.expire_time}")
                 
             elif cmd == "del":
-                # 删除账号 #account del wx_id
+                # 删除账号 $account del wx_id
                 if len(parts) != 3:
-                    e_context["reply"] = Reply(ReplyType.ERROR, "格式错误,正确格式: #account del wx_id")
+                    e_context["reply"] = Reply(ReplyType.ERROR, "格式错误,正确格式: $account del wx_id")
                     e_context.action = EventAction.BREAK_PASS
                     return
                     
@@ -147,7 +147,7 @@ class Account(Plugin):
                     e_context["reply"] = Reply(ReplyType.ERROR, f"账号 {wx_id} 不存在")
                     
             elif cmd == "list":
-                # 列出所有账号 #account list
+                # 列出所有账号 $account list
                 accounts = session.query(WxAccount).all()
                 if not accounts:
                     e_context["reply"] = Reply(ReplyType.INFO, "暂无账号信息")
@@ -167,9 +167,9 @@ class Account(Plugin):
                 e_context["reply"] = Reply(ReplyType.INFO, reply)
                 
             elif cmd == "info":
-                # 查看账号信息 #account info wx_id
+                # 查看账号信息 $account info wx_id
                 if len(parts) != 3:
-                    e_context["reply"] = Reply(ReplyType.ERROR, "格式错误,正确格式: #account info wx_id")
+                    e_context["reply"] = Reply(ReplyType.ERROR, "格式错误,正确格式: $account info wx_id")
                     e_context.action = EventAction.BREAK_PASS
                     return
                     
@@ -191,7 +191,7 @@ class Account(Plugin):
                 e_context["reply"] = Reply(ReplyType.INFO, reply)
                 
             else:
-                e_context["reply"] = Reply(ReplyType.ERROR, f"未知命令: {cmd}\n请使用 #account 查看帮助")
+                e_context["reply"] = Reply(ReplyType.ERROR, f"未知命令: {cmd}\n请使用 $account 查看帮助")
                 
         except Exception as e:
             logger.error(f"[Account] 处理管理员命令异常: {e}")
@@ -207,9 +207,9 @@ class Account(Plugin):
             return
             
         help_text = """账号管理插件使用帮助:
-#account add wx_id days [nickname] [remark] - 添加/更新账号
-#account del wx_id - 删除账号
-#account list - 列出所有账号
-#account info wx_id - 查看账号信息"""
+$account add wx_id days [nickname] [remark] - 添加/更新账号
+$account del wx_id - 删除账号
+$account list - 列出所有账号
+$account info wx_id - 查看账号信息"""
         e_context["reply"] = Reply(ReplyType.INFO, help_text)
         e_context.action = EventAction.BREAK_PASS 
