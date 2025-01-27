@@ -4,11 +4,10 @@ from common.log import logger
 from bridge.context import ContextType
 from bridge.reply import Reply, ReplyType
 from datetime import datetime, timedelta
-import json
 import os
 from plugins import Plugin, Event, EventAction
 from plugins.event import EventContext
-from models import init_db, WxAccount  # 修改导入路径
+from account.models import init_db, WxAccount  # 修改导入路径
 
 @plugins.register(
     name="Account",
