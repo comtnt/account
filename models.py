@@ -2,10 +2,10 @@
 数据库模型和管理类
 """
 from __future__ import annotations  # 用于类型注解中的字符串引用
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
-from sqlalchemy import create_engine, Column, String, DateTime, Boolean
+from sqlalchemy import create_engine, Column, String, DateTime, Boolean, Integer
 from sqlalchemy.orm import sessionmaker, scoped_session, Session
 from sqlalchemy.ext.declarative import declarative_base
 import os
@@ -17,16 +17,30 @@ class WxAccount(Base):
     """微信账号模型"""
     __tablename__ = 'wx_accounts'
 
-    wx_id: str = Column(String(100), primary_key=True)  # 微信ID
-    nickname: Optional[str] = Column(String(100))       # 微信昵称
-    create_time: datetime = Column(DateTime, default=datetime.now)  # 创建时间
-    expire_time: Optional[datetime] = Column(DateTime)  # 过期时间
-    is_active: bool = Column(Boolean, default=True)     # 是否激活
-    remark: Optional[str] = Column(String(500))        # 备注
+    id = Column(Integer, primary_key=True)
+    wx_id = Column(String(50), unique=True, nullable=False)
+    nickname = Column(String(50))
+    create_time = Column(DateTime, default=datetime.now)
+    expire_time = Column(DateTime)
+    is_active = Column(Boolean, default=False)
+    remark = Column(String(200))
+    free_quota = Column(Integer, default=0)  # 剩余免费额度
+    quota_reset_time = Column(DateTime)  # 下次额度重置时间
 
-    def is_expired(self) -> bool:
+    def is_expired(self):
         """检查账号是否过期"""
-        return datetime.now() > self.expire_time if self.expire_time else True
+        return self.expire_time < datetime.now()
+
+    def should_reset_quota(self):
+        """检查是否需要重置免费额度"""
+        return not self.quota_reset_time or self.quota_reset_time < datetime.now()
+
+    def reset_quota(self, quota_limit):
+        """重置免费额度"""
+        self.free_quota = quota_limit
+        # 设置下次重置时间为明天0点
+        tomorrow = datetime.now() + timedelta(days=1)
+        self.quota_reset_time = datetime(tomorrow.year, tomorrow.month, tomorrow.day, 0, 0, 0)
 
 class Database:
     """数据库管理类"""

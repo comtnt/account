@@ -28,7 +28,8 @@ class Account(Plugin):
                     "database_path": "wx_accounts.db",
                     "default_expire_days": 30,
                     "expired_reply": "您的账号已过期或未开通，请联系管理员充值。",
-                    "admin_wx_ids": []
+                    "admin_wx_ids": [],
+                    "free_quota_limit": 30,  # 每日免费额度
                 }
                 self.save_config()
             
@@ -42,6 +43,35 @@ class Account(Plugin):
         except Exception as e:
             logger.error(f"[Account] 插件初始化异常: {e}")
             raise e
+
+    def _check_and_update_quota(self, account, session):
+        """检查并更新免费额度"""
+        # 检查是否需要重置额度
+        if account.should_reset_quota():
+            account.reset_quota(self.config.get("free_quota_limit", 30))
+            session.commit()
+            
+        # 如果还有免费额度，减少一次并返回True
+        if account.free_quota > 0:
+            account.free_quota -= 1
+            session.commit()
+            return True
+        return False
+
+    def _get_quota_info(self, account):
+        """获取额度信息提示"""
+        if account.is_active and not account.is_expired():
+            return "（付费用户）"
+        
+        reset_time = account.quota_reset_time
+        if not reset_time:
+            return f"（免费额度：{account.free_quota}次，将在明天0点重置）"
+        
+        now = datetime.now()
+        if reset_time > now:
+            hours = int((reset_time - now).total_seconds() / 3600)
+            return f"（剩余免费额度：{account.free_quota}次，{hours}小时后重置）"
+        return f"（免费额度：{account.free_quota}次，将在明天0点重置）"
 
     def on_handle_context(self, e_context: EventContext):
         """处理消息事件"""
@@ -75,12 +105,14 @@ class Account(Plugin):
                         session.add(group_account)
                         session.commit()
                     
-                    # 如果群账号过期，直接返回过期消息
+                    # 如果群账号过期，检查免费额度
                     if not group_account.is_active or group_account.is_expired():
-                        expired_reply = f"该群({group_id})未开通服务或已过期，请联系管理员开通。"
-                        e_context["reply"] = Reply(ReplyType.TEXT, expired_reply)
-                        e_context.action = EventAction.BREAK_PASS
-                        return
+                        if not self._check_and_update_quota(group_account, session):
+                            quota_info = self._get_quota_info(group_account)
+                            expired_reply = f"该群({group_id})未开通服务或已过期，请联系管理员开通。{quota_info}"
+                            e_context["reply"] = Reply(ReplyType.TEXT, expired_reply)
+                            e_context.action = EventAction.BREAK_PASS
+                            return
             else:
                 # 私聊消息
                 wx_id = context.get("msg").from_user_id
@@ -112,12 +144,14 @@ class Account(Plugin):
                 session.add(account)
                 session.commit()
             
-            # 检查账号是否可用
+            # 检查账号是否可用，如果不可用检查免费额度
             if not account.is_active or account.is_expired():
-                expired_reply = f"您的账号({wx_id})已过期或未开通，请联系管理员充值。"
-                e_context["reply"] = Reply(ReplyType.TEXT, expired_reply)
-                e_context.action = EventAction.BREAK_PASS
-                return
+                if not self._check_and_update_quota(account, session):
+                    quota_info = self._get_quota_info(account)
+                    expired_reply = f"您的账号({wx_id})已过期或未开通，请联系管理员充值。{quota_info}"
+                    e_context["reply"] = Reply(ReplyType.TEXT, expired_reply)
+                    e_context.action = EventAction.BREAK_PASS
+                    return
                 
         finally:
             # 确保会话被关闭
