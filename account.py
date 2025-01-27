@@ -87,7 +87,8 @@ class Account(Plugin):
             
             # 检查账号是否可用
             if not account.is_active or account.is_expired():
-                e_context["reply"] = Reply(ReplyType.TEXT, self.config["expired_reply"])
+                expired_reply = f"您的账号({wx_id})已过期或未开通，请联系管理员充值。"
+                e_context["reply"] = Reply(ReplyType.TEXT, expired_reply)
                 e_context.action = EventAction.BREAK_PASS
                 return
                 
