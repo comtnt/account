@@ -90,6 +90,10 @@ class Account(Plugin):
         """获取额度信息提示"""
         if account.is_active and not account.is_expired():
             return ""  # 付费用户不显示额度信息
+            
+        # 只在剩余额度小于等于3次时显示提示
+        if account.free_quota > 3:
+            return ""
         
         reset_time = account.quota_reset_time
         if not reset_time:
@@ -97,8 +101,15 @@ class Account(Plugin):
         
         now = datetime.now()
         if reset_time > now:
-            hours = int((reset_time - now).total_seconds() / 3600)
-            return f"\n（{account.wx_id} - 剩余免费额度：{account.free_quota}次，{hours}小时后重置）"
+            # 计算剩余时间
+            time_diff = reset_time - now
+            hours = int(time_diff.total_seconds() / 3600)
+            minutes = int((time_diff.total_seconds() % 3600) / 60)
+            if hours > 0:
+                time_str = f"{hours}小时{minutes}分钟"
+            else:
+                time_str = f"{minutes}分钟"
+            return f"\n（{account.wx_id} - 剩余免费额度：{account.free_quota}次，{time_str}后重置）"
         return f"\n（{account.wx_id} - 免费额度：{account.free_quota}次，将在明天0点重置）"
 
     def on_handle_context(self, e_context: EventContext):
