@@ -98,7 +98,7 @@ class Account(Plugin):
             return ""
         
         # 新的额度信息格式
-        return f"\n（{account.wx_id} - 每天免费体验{self.config.get('free_quota_limit', 30)}次，今天剩余：{account.free_quota}次）"
+        return f"\n（每天免费体验{self.config.get('free_quota_limit', 30)}次，今天剩余：{account.free_quota}次。{account.wx_id}）"
 
     def on_handle_context(self, e_context: EventContext):
         """处理消息事件"""
