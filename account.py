@@ -30,6 +30,8 @@ class Account(Plugin):
                     "expired_reply": "您的账号已过期或未开通，请联系管理员充值。",
                     "admin_wx_ids": [],
                     "free_quota_limit": 30,  # 每日免费额度
+                    "admin_wx_contact": "aixiaozhi01",  # 管理员微信号
+                    "monthly_price": 15  # 包月价格
                 }
                 self.save_config()
             
@@ -95,22 +97,8 @@ class Account(Plugin):
         if account.free_quota > 3:
             return ""
         
-        reset_time = account.quota_reset_time
-        if not reset_time:
-            return f"\n（{account.wx_id} - 免费额度：{account.free_quota}次，将在明天0点重置）"
-        
-        now = datetime.now()
-        if reset_time > now:
-            # 计算剩余时间
-            time_diff = reset_time - now
-            hours = int(time_diff.total_seconds() / 3600)
-            minutes = int((time_diff.total_seconds() % 3600) / 60)
-            if hours > 0:
-                time_str = f"{hours}小时{minutes}分钟"
-            else:
-                time_str = f"{minutes}分钟"
-            return f"\n（{account.wx_id} - 剩余免费额度：{account.free_quota}次，{time_str}后重置）"
-        return f"\n（{account.wx_id} - 免费额度：{account.free_quota}次，将在明天0点重置）"
+        # 新的额度信息格式
+        return f"\n（{account.wx_id} - 每天免费体验{self.config.get('free_quota_limit', 30)}次，今天剩余：{account.free_quota}次）"
 
     def on_handle_context(self, e_context: EventContext):
         """处理消息事件"""
@@ -147,7 +135,7 @@ class Account(Plugin):
                     # 如果群账号过期，检查免费额度
                     if not group_account.is_active or group_account.is_expired():
                         if not self._check_and_update_quota(group_account, session):
-                            expired_reply = f"该群({group_id})未开通服务或已过期，请联系管理员开通。"
+                            expired_reply = f"该群({group_id})的月租服务未开通或已过期，请加管理员微信{self.config.get('admin_wx_contact', 'aixiaozhi01')}开通，包月{self.config.get('monthly_price', 15)}不限量。"
                             e_context["reply"] = Reply(ReplyType.TEXT, expired_reply)
                             e_context.action = EventAction.BREAK_PASS
                             return
@@ -185,7 +173,7 @@ class Account(Plugin):
             # 检查账号是否可用，如果不可用检查免费额度
             if not account.is_active or account.is_expired():
                 if not self._check_and_update_quota(account, session):
-                    expired_reply = f"您的账号({wx_id})已过期或未开通，请联系管理员充值。"
+                    expired_reply = f"您的账号({wx_id})的月租服务未开通或已过期，请加管理员微信{self.config.get('admin_wx_contact', 'aixiaozhi01')}开通，包月{self.config.get('monthly_price', 15)}不限量。"
                     e_context["reply"] = Reply(ReplyType.TEXT, expired_reply)
                     e_context.action = EventAction.BREAK_PASS
                     return
