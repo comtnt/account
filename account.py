@@ -135,7 +135,7 @@ class Account(Plugin):
                     # 如果群账号过期，检查免费额度
                     if not group_account.is_active or group_account.is_expired():
                         if not self._check_and_update_quota(group_account, session):
-                            expired_reply = f"该群({group_id})的月租服务未开通或已过期，请加管理员微信{self.config.get('admin_wx_contact', 'aixiaozhi01')}开通，包月{self.config.get('monthly_price', 15)}不限量。"
+                            expired_reply = f"该群的月租服务未开通或已过期，请加管理员微信{self.config.get('admin_wx_contact', 'aixiaozhi01')}开通，包月{self.config.get('monthly_price', 15)}不限量。"
                             e_context["reply"] = Reply(ReplyType.TEXT, expired_reply)
                             e_context.action = EventAction.BREAK_PASS
                             return
@@ -173,7 +173,7 @@ class Account(Plugin):
             # 检查账号是否可用，如果不可用检查免费额度
             if not account.is_active or account.is_expired():
                 if not self._check_and_update_quota(account, session):
-                    expired_reply = f"您的账号({wx_id})的月租服务未开通或已过期，请加管理员微信{self.config.get('admin_wx_contact', 'aixiaozhi01')}开通，包月{self.config.get('monthly_price', 15)}不限量。"
+                    expired_reply = f"您的月租服务未开通或已过期，请加管理员微信{self.config.get('admin_wx_contact', 'aixiaozhi01')}开通，包月{self.config.get('monthly_price', 15)}不限量。"
                     e_context["reply"] = Reply(ReplyType.TEXT, expired_reply)
                     e_context.action = EventAction.BREAK_PASS
                     return
